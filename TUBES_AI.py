@@ -1,126 +1,178 @@
-import random
-import math
-import numpy as np
+# =============================================================
+#             ALGORITMA GENETIKA UNTUK MINIMISASI f(x1, x2)
+# =============================================================
+# Tujuan: Mencari nilai minimum dari fungsi non-linear kompleks
+# dengan representasi kromosom biner tanpa menggunakan library eksternal.
+# =============================================================
 
+# -------------------------------------------------------------
+# BAGIAN 1: Fungsi Matematika Dasar (tanpa math atau numpy)
+# -------------------------------------------------------------
+def factorial(n):
+    result = 1
+    for i in range(2, n + 1):
+        result *= i
+    return result
 
-# ANGGOTA KELOMPOK:
-#1. Gumilar Hari Subagja(103022300137)
-#2. Muhammad Ilham Firdaus(103022300138)
+def power(x, n):
+    result = 1.0
+    for _ in range(n):
+        result *= x
+    return result
 
-# === Parameter GA ===
-POP_SIZE = 50
-CHROMOSOME_LENGTH = 32   # 16 bit per variabel
-GENE_LENGTH = 16
-MAX_GENERATIONS = 100
-PC = 0.8                 # Probabilitas crossover
-PM = 0.02                # Probabilitas mutasi
-TOURNAMENT_SIZE = 3
-ELITISM_COUNT = 2
+def sin(x, terms=10):
+    x = x % (2 * 3.1415926535)  # Normalisasi sudut
+    result = 0.0
+    for n in range(terms):
+        sign = -1 if n % 2 else 1
+        result += sign * power(x, 2 * n + 1) / factorial(2 * n + 1)
+    return result
 
-# === Fungsi Objektif (yang akan diminimalkan) ===
-def objective_function(x1, x2):
-    try:
-        term1 = math.sin(x1) * math.cos(x2) * math.tan(x1 + x2)
-    except:
-        term1 = 0  # Untuk menangani tan tak hingga
-    term2 = (3 / 4) * math.exp(1 - math.sqrt(x1 ** 2 + x2 ** 2))
-    return -(term1 + term2)
+def cos(x, terms=10):
+    x = x % (2 * 3.1415926535)
+    result = 0.0
+    for n in range(terms):
+        sign = -1 if n % 2 else 1
+        result += sign * power(x, 2 * n) / factorial(2 * n)
+    return result
 
-# === Konversi Binary <-> Float ===
-def binary_to_float(binary_str, min_val, max_val):
-    decimal = int(binary_str, 2)
-    return min_val + decimal * (max_val - min_val) / (2 ** len(binary_str) - 1)
+def tan(x):
+    c = cos(x)
+    if abs(c) < 1e-8:  # Hindari pembagian dengan nol
+        return float('inf')
+    return sin(x) / c
 
-def float_to_binary(value, min_val, max_val, length):
-    decimal = round((value - min_val) * (2 ** length - 1) / (max_val - min_val))
-    return format(decimal, f'0{length}b')
+def sqrt(x, iterations=10):
+    if x < 0:
+        return float('nan')
+    guess = x / 2.0
+    for _ in range(iterations):
+        guess = (guess + x / guess) / 2.0
+    return guess
 
-# === Inisialisasi Populasi ===
+def exp(x, terms=20):
+    result = 1.0
+    for i in range(1, terms):
+        result += power(x, i) / factorial(i)
+    return result
+
+# -------------------------------------------------------------
+# BAGIAN 2: Random Number Generator (tanpa import random)
+# -------------------------------------------------------------
+seed = 123456789  # Seed acak awal
+def rand():
+    global seed
+    seed = (1103515245 * seed + 12345) % (2 ** 31)
+    return seed / (2 ** 31)
+
+def randint(a, b):
+    return a + int(rand() * (b - a + 1))
+
+def random_bit():
+    return '1' if rand() < 0.5 else '0'
+
+# -------------------------------------------------------------
+# BAGIAN 3: Parameter GA
+# -------------------------------------------------------------
+POP_SIZE = 10             # Ukuran populasi
+GEN_LENGTH = 20           # Panjang bitstring kromosom
+CHROMOSOME_BITS = 10      # Panjang representasi tiap variabel (x1 dan x2)
+X_MIN, X_MAX = -10, 10    # Batas domain variabel
+MAX_GENERATIONS = 10      # Jumlah generasi (loop)
+PC = 0.8                  # Probabilitas crossover
+PM = 0.01                 # Probabilitas mutasi per-bit
+
+# -------------------------------------------------------------
+# BAGIAN 4: Representasi Kromosom & Fitness
+# -------------------------------------------------------------
+def random_bitstring(length):
+    return ''.join(random_bit() for _ in range(length))
+
 def initialize_population():
-    return [''.join(random.choice('01') for _ in range(CHROMOSOME_LENGTH)) for _ in range(POP_SIZE)]
+    return [random_bitstring(GEN_LENGTH) for _ in range(POP_SIZE)]
 
-# === Dekode kromosom jadi x1, x2 ===
-def decode_chromosome(chromosome):
-    x1_bin = chromosome[:GENE_LENGTH]
-    x2_bin = chromosome[GENE_LENGTH:]
-    x1 = binary_to_float(x1_bin, -10, 10)
-    x2 = binary_to_float(x2_bin, -10, 10)
-    return x1, x2
+def binary_to_real(bits, min_val, max_val):
+    integer = int(bits, 2)
+    max_int = 2 ** CHROMOSOME_BITS - 1
+    return min_val + (max_val - min_val) * integer / max_int
 
-# === Hitung Fitness ===
-def calculate_fitness(chromosome):
-    x1, x2 = decode_chromosome(chromosome)
-    return -objective_function(x1, x2)  # Karena GA memaksimalkan fitness
+def decode(bitstring):
+    x1_bits = bitstring[:CHROMOSOME_BITS]
+    x2_bits = bitstring[CHROMOSOME_BITS:]
+    return binary_to_real(x1_bits, X_MIN, X_MAX), binary_to_real(x2_bits, X_MIN, X_MAX)
 
-# === Tournament Selection ===
-def select_parent(population, fitnesses):
-    participants = random.sample(list(zip(population, fitnesses)), TOURNAMENT_SIZE)
-    return max(participants, key=lambda x: x[1])[0]
+def f(x1, x2):
+    try:
+        return -(sin(x1) * cos(x2) * tan(x1 + x2) + 0.75 * exp(1 - sqrt(x1 * x1)))
+    except:
+        return float('inf')
 
-# === Crossover Single Point ===
-def crossover(parent1, parent2):
-    if random.random() < PC:
-        point = random.randint(1, CHROMOSOME_LENGTH - 1)
-        child1 = parent1[:point] + parent2[point:]
-        child2 = parent2[:point] + parent1[point:]
-        return child1, child2
-    return parent1, parent2
+def fitness(bitstring):
+    x1, x2 = decode(bitstring)
+    val = f(x1, x2)
+    if val == float('inf'):
+        return 0.0001  # Hindari divide by zero
+    return 1 / (1 + val)
 
-# === Mutasi Bit Flip ===
-def mutate(chromosome):
-    mutated = list(chromosome)
-    for i in range(len(mutated)):
-        if random.random() < PM:
-            mutated[i] = '1' if mutated[i] == '0' else '0'
-    return ''.join(mutated)
+# -------------------------------------------------------------
+# BAGIAN 5: Operasi Genetika (GA Core)
+# -------------------------------------------------------------
+def select(population):
+    # Tournament Selection (2-individu)
+    i, j = randint(0, len(population) - 1), randint(0, len(population) - 1)
+    return population[i] if fitness(population[i]) > fitness(population[j]) else population[j]
 
-# === Algoritma Genetika Utama ===
-def genetic_algorithm():
+def crossover(p1, p2):
+    if rand() < PC:
+        point = randint(1, GEN_LENGTH - 1)
+        return p1[:point] + p2[point:], p2[:point] + p1[point:]
+    return p1, p2
+
+def mutate(bitstring):
+    return ''.join((bit if rand() > PM else ('0' if bit == '1' else '1')) for bit in bitstring)
+
+# -------------------------------------------------------------
+# BAGIAN 6: Proses Evolusi Generasi ke Generasi
+# -------------------------------------------------------------
+def run_ga():
     population = initialize_population()
-    best_history = []
+    best = population[0]
 
-    for generation in range(MAX_GENERATIONS):
-        fitnesses = [calculate_fitness(ind) for ind in population]
-        best_idx = np.argmax(fitnesses)
-        best_chromosome = population[best_idx]
-        best_fitness = fitnesses[best_idx]
-        best_history.append(best_fitness)
+    for gen in range(MAX_GENERATIONS):
+        new_population = []
 
-        # Elitisme
-        elite_indices = np.argsort(fitnesses)[-ELITISM_COUNT:]
-        new_population = [population[i] for i in elite_indices]
+        # Elitisme: simpan individu terbaik
+        elite = max(population, key=fitness)
+        new_population.append(elite)
 
-        # Buat populasi baru
         while len(new_population) < POP_SIZE:
-            parent1 = select_parent(population, fitnesses)
-            parent2 = select_parent(population, fitnesses)
+            parent1 = select(population)
+            parent2 = select(population)
             child1, child2 = crossover(parent1, parent2)
-            child1 = mutate(child1)
-            child2 = mutate(child2)
-            new_population.extend([child1, child2])
+            new_population.append(mutate(child1))
+            if len(new_population) < POP_SIZE:
+                new_population.append(mutate(child2))
 
-        population = new_population[:POP_SIZE]
+        population = new_population
 
-        # Cetak info tiap 10 generasi
-        if generation % 10 == 0 or generation == MAX_GENERATIONS - 1:
-            x1, x2 = decode_chromosome(best_chromosome)
-            print(f"Generasi {generation:3d} | f(x) terbaik = {-best_fitness:.6f} | x1 = {x1:.4f} | x2 = {x2:.4f}")
+        # Perbarui solusi terbaik jika ada
+        if fitness(elite) > fitness(best):
+            best = elite
 
-    # Output akhir
-    best_fitnesses = [calculate_fitness(ind) for ind in population]
-    best_idx = np.argmax(best_fitnesses)
-    best_chromosome = population[best_idx]
-    x1, x2 = decode_chromosome(best_chromosome)
-    best_fx = -best_fitnesses[best_idx]
+        # Cetak log tiap generasi
+        x1, x2 = decode(elite)
+        print("Generasi", gen + 1, ": Best Fitness =", fitness(elite), "| x1 =", x1, "| x2 =", x2)
 
+    # Cetak hasil akhir
+    x1, x2 = decode(best)
     print("\n=== HASIL AKHIR ===")
-    print(f"Kromosom terbaik : {best_chromosome}")
-    print(f"Nilai x1         : {x1:.6f}")
-    print(f"Nilai x2         : {x2:.6f}")
-    print(f"Minimum f(x1,x2) : {best_fx:.6f}")
+    print("Kromosom terbaik:", best)
+    print("x1 =", x1)
+    print("x2 =", x2)
+    print("f(x1, x2) =", f(x1, x2))
 
-    return best_chromosome, x1, x2, best_fx
-
-# === Eksekusi Program ===
+# -------------------------------------------------------------
+# BAGIAN 7: Eksekusi
+# -------------------------------------------------------------
 if __name__ == "__main__":
-    genetic_algorithm()
+    run_ga()
