@@ -59,7 +59,7 @@ def exp(x, terms=20):
 # -------------------------------------------------------------
 # BAGIAN 2: Random Number Generator (tanpa import random)
 # -------------------------------------------------------------
-seed = 123456789  # Seed acak awal
+seed = 123456756  # Seed acak awal
 def rand():
     global seed
     seed = (1103515245 * seed + 12345) % (2 ** 31)
